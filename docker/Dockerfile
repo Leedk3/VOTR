@@ -1,0 +1,181 @@
+FROM nvidia/cuda:11.3.0-cudnn8-devel-ubuntu18.04
+
+RUN echo 'debconf debconf/frontend select Noninteractive' | debconf-set-selections
+
+# Install basics
+RUN apt-get update -y \
+    && apt-get install build-essential \
+    && apt-get install -y apt-utils git curl ca-certificates bzip2 tree htop wget \
+    && apt-get install -y libglib2.0-0 libsm6 libxext6 libxrender-dev bmon iotop g++ python3.6 python3.6-dev python3.6-distutils
+
+RUN apt-get update && apt-get install -y software-properties-common
+RUN apt-get update -q && \
+    apt-get install -yq wget curl git build-essential vim sudo lsb-release locales bash-completion
+
+# Install cmake v3.13.2
+RUN apt-get purge -y cmake && \
+    mkdir /root/temp && \
+    cd /root/temp && \
+    wget https://github.com/Kitware/CMake/releases/download/v3.13.2/cmake-3.13.2.tar.gz && \
+    tar -xzvf cmake-3.13.2.tar.gz && \
+    cd cmake-3.13.2 && \
+    bash ./bootstrap && \
+    make && \
+    make install && \
+    cmake --version && \
+    rm -rf /root/temp
+
+# Install python
+RUN ln -sv /usr/bin/python3.6 /usr/bin/python
+# RUN wget https://bootstrap.pypa.io/get-pip.py && \
+RUN wget https://bootstrap.pypa.io/pip/3.6/get-pip.py && \
+	python get-pip.py && \
+	rm get-pip.py
+
+# Install python packages
+RUN PIP_INSTALL="python -m pip --no-cache-dir install" && \
+    $PIP_INSTALL numpy==1.19.3 llvmlite numba 
+
+# Install torch and torchvision
+# See https://pytorch.org/ for other options if you use a different version of CUDA
+RUN pip3 install torch==1.10.2+cu113 torchvision==0.11.3+cu113 torchaudio==0.10.2+cu113 -f https://download.pytorch.org/whl/cu113/torch_stable.html
+RUN pip3 install numpy==1.19.5 #to solve numpy dependency issues with opencv!
+
+# Install python packages
+RUN PIP_INSTALL="python -m pip --no-cache-dir install" && \
+    $PIP_INSTALL tensorboardX easydict pyyaml scikit-image tqdm SharedArray six
+
+# WORKDIR /root
+
+# Install Boost geometry
+RUN wget https://jaist.dl.sourceforge.net/project/boost/boost/1.68.0/boost_1_68_0.tar.gz && \
+    tar xzvf boost_1_68_0.tar.gz && \
+    cp -r ./boost_1_68_0/boost /usr/include && \
+    rm -rf ./boost_1_68_0 && \
+    rm -rf ./boost_1_68_0.tar.gz 
+
+# A weired problem that hasn't been solved yet
+RUN pip3 uninstall -y SharedArray && \
+    pip3 install SharedArray
+
+RUN pip3 install spconv-cu113
+
+RUN pip3 install open3d==0.13
+RUN pip3 install tensorflow-cpu==2.1.0
+RUN pip3 install tensorflow-gpu==2.1.0
+RUN pip3 install waymo-open-dataset-tf-2-1-0==1.2.0
+RUN pip3 install --upgrade git+https://github.com/klintan/pypcd.git
+RUN apt install -y libgl1-mesa-glx
+
+#just for running the Demo we need to add:
+RUN apt-get update && apt-get install -y python3-opencv
+RUN pip3 install opencv-python
+
+#to get a GUI one needs to install:
+RUN apt-get install -y python3-tk 
+RUN apt-get install -y libnvidia-gl-510 x11-apps #this needs to match your GPU driver version!!!!!!!!!!!!!!
+
+RUN apt-get install -y tmux tmuxp vim 
+RUN apt-get install -y x11-xserver-utils
+# RUN mkdir -p /OpenPCDet/data/kitti/ImageSets
+# RUN mkdir -p /OpenPCDet/data/kitti/testing
+# RUN mkdir -p /OpenPCDet/data/kitti/training
+# RUN mkdir /OpenPCDet/checkpoints
+
+# #ROS
+# RUN apt-get install -y net-tools iputils-ping
+# RUN sh -c 'echo "deb http://packages.ros.org/ros/ubuntu bionic main" > /etc/apt/sources.list.d/ros-latest.list'
+# RUN curl -k https://raw.githubusercontent.com/ros/rosdistro/master/ros.key | sudo apt-key add -
+
+# RUN apt-get update -q && \
+#     apt-get install -y ros-melodic-desktop-full python-rosdep &&\
+#     # apt-get install -y ros-melodic-desktop-full python3-rosdep python3-rosinstall python3-rosinstall-generator python3-wstool build-essential && \
+#     rm -rf /var/lib/#apt/lists/*
+# RUN rosdep init
+# RUN rosdep update
+# RUN apt install -y python3-pip python3-all-dev python3-rospkg
+# RUN apt install -y ros-melodic-desktop-full --fix-missing
+
+# # RUN rm /usr/bin/python
+# # RUN rm /usr/bin/python3
+# # RUN ln -sv /usr/bin/python3.6 /usr/bin/python
+
+# RUN locale-gen en_US.UTF-8
+# RUN useradd -m -d /home/ubuntu ubuntu -p `perl -e 'print crypt("ubuntu", "salt"),"\n"'` && \
+#     echo "ubuntu ALL=(ALL) ALL" >> /etc/sudoers
+# USER ubuntu
+# # WORKDIR /home/ubuntu
+# ENV HOME=/home/ubuntu \
+#     CATKIN_SHELL=bash
+# ENV LANG=en_US.UTF-8 LANGUAGE=en_US:en LC_ALL=en_US.UTF-8
+
+# RUN mkdir -p ~/catkin_ws/src \
+#     && /bin/bash -c '. /opt/ros/melodic/setup.bash; catkin_init_workspace $HOME/catkin_ws/src' \
+#     && /bin/bash -c '. /opt/ros/melodic/setup.bash; cd $HOME/catkin_ws; catkin_make'
+# RUN mkdir -p ~/catkin_ws/build
+# RUN mkdir -p ~/catkin_ws/devel
+
+# RUN echo 'source /opt/ros/melodic/setup.bash' >> ~/.bashrc \
+#     && echo 'source ~/catkin_ws/devel/setup.bash' >> ~/.bashrc
+# # COPY ./docker/ros_entrypoint.sh /
+# # ENTRYPOINT ["/ros_entrypoint.sh"]
+# # CMD ["/bin/bash"]
+# ##ROS
+
+
+# Setup non-root admin user
+ARG USERNAME=admin
+ARG USER_UID=1000
+ARG USER_GID=1000
+
+# Install prerequisites
+RUN apt-get update && apt-get install -y \
+        sudo \
+&& rm -rf /var/lib/apt/lists/* \
+&& apt-get clean
+
+# Reuse triton-server user as 'admin' user if exists
+RUN if [ $(getent group triton-server) ]; then \
+        groupmod --gid ${USER_GID} -n ${USERNAME} triton-server ; \
+        usermod -l ${USERNAME} -u ${USER_UID} -m -d /home/${USERNAME} triton-server ; \
+        mkdir -p /home/${USERNAME} ; \
+        sudo chown ${USERNAME}:${USERNAME} /home/${USERNAME} ; \
+    fi
+
+# Create the 'admin' user if not already exists
+RUN if [ ! $(getent passwd ${USERNAME}) ]; then \
+        groupadd --gid ${USER_GID} ${USERNAME} ; \
+        useradd --uid ${USER_UID} --gid ${USER_GID} -m ${USERNAME} ; \
+    fi
+
+# Update 'admin' user
+RUN echo ${USERNAME} ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/${USERNAME} \
+    && chmod 0440 /etc/sudoers.d/${USERNAME} \
+    && adduser ${USERNAME} video && adduser ${USERNAME} sudo
+
+# Copy scripts
+#RUN mkdir -p /usr/local/bin/scripts
+#COPY scripts/*entrypoint.sh /usr/local/bin/scripts/
+#RUN  chmod +x /usr/local/bin/scripts/*.sh
+
+# Copy middleware profiles
+# RUN mkdir -p /usr/local/share/middleware_profiles
+# COPY middleware_profiles/*profile.xml /usr/local/share/middleware_profiles/
+
+ENV USERNAME=${USERNAME}
+ENV USER_GID=${USER_GID}
+ENV USER_UID=${USER_UID}
+
+
+
+COPY pcdet /VOTR/pcdet
+#COPY tools /VOTR/tools
+# COPY docs /VOTR/docs
+
+ENV PYTHONPATH="/VOTR/:$PYTHONPATH"
+ADD setup.py /VOTR/
+
+WORKDIR /VOTR
+#RUN python /VOTR/setup.py develop
+
+
